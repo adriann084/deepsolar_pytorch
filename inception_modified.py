@@ -28,7 +28,7 @@ from sklearn.metrics import r2_score
 
 
 import torch.nn.functional as F
-from torchvision.models import Inception3
+from torchvision.models import inception_v3, Inception3
 from collections import namedtuple
 
 _InceptionOuputs = namedtuple('InceptionOuputs', ['logits', 'aux_logits'])
@@ -39,7 +39,8 @@ class InceptionSegmentation(nn.Module):
         super(InceptionSegmentation, self).__init__()
         assert level in [1, 2]
         self.level = level
-        self.inception3 = Inception3_modified(num_classes=num_outputs, aux_logits=False, transform_input=False)
+        self.inception3 = Inception3_modified(num_classes=1000, aux_logits=False, transform_input=False)
+        #self.inception3 = Inception3(pretrained=True)
         self.convolution1 = nn.Conv2d(288, 512, bias=True, kernel_size=3, padding=1)
         if self.level == 1:
             self.linear1 = nn.Linear(512, num_outputs, bias=False)
@@ -57,7 +58,8 @@ class InceptionSegmentation(nn.Module):
             y = self.linear1(y)          # N x 2
             if testing:
                 CAM = self.linear1.weight.data[1, :] * feature_map.permute(0, 2, 3, 1)
-                CAM = CAM.sum(dim=3)
+                CAM = torch.nn.functional.interpolate(torch.permute(CAM, (0,3,1,2)) ,size=(400,400))
+                CAM = CAM.sum(dim=1)
         else:
             feature_map = self.convolution2(feature_map)     # N x 512 x 35 x 35
             feature_map = F.relu(feature_map)  # N x 512 x 35 x 35
@@ -66,7 +68,9 @@ class InceptionSegmentation(nn.Module):
             y = self.linear2(y)          # N x 2
             if testing:
                 CAM = self.linear2.weight.data[1, :] * feature_map.permute(0, 2, 3, 1)
-                CAM = CAM.sum(dim=3)
+                CAM = torch.nn.functional.interpolate(torch.permute(CAM, (0,3,1,2)) ,size=(400,400))
+                CAM = CAM.sum(dim=1)
+
         if testing:
             return y, logits, CAM
         else:
